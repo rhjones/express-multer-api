@@ -6,7 +6,11 @@
 // this method reads .env and makes variables available via process.env
 require('dotenv').config();
 
+// group node imports together
 const fs = require('fs');
+const crypto = require('crypto');
+
+// npm imports are separate
 const fileType = require('file-type');
 const AWS = require('aws-sdk');
 
@@ -41,6 +45,32 @@ const parseFile = (fileBuffer) => {
   return file;
 };
 
+
+const randomHexString = (length) => {
+  return new Promise((resolve, reject) => {
+    crypto.randomBytes(length, (error, buffer) => {
+      if (error) {
+        reject(error);
+      }
+
+      resolve(buffer.toString('hex'));
+    });
+  });
+};
+
+const nameFile = (file) => {
+  return randomHexString(16)
+  .then((val) => {
+    file.name = val;
+    return file;
+  });
+};
+
+const nameDirectory = (file) => {
+  file.dir = new Date().toISOString().split('T')[0];
+  return file;
+};
+
 const s3 = new AWS.S3({
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY,
@@ -50,27 +80,24 @@ const s3 = new AWS.S3({
 
 const upload = (file) => {
   const options = {
-    // get bucket name from AWS S3 console
+    // get the bucket name from your AWS S3 console
     Bucket: 'rhj-ga-wdi',
-    // attach fileBuffer as stream to send to S3
+    // attach the fileBuffer as a stream to send to S3
     Body: file.data,
-    // allow anyone to view uploaded file
+    // allow anyone to access the URL of the uploaded file
     ACL: 'public-read',
-    // tell S3 what the mimetype is
+    // tell S3 what the mime-type is
     ContentType: file.mime,
     // pick a filename for S3 to use for the upload
-    Key: `test/test.${file.ext}`
+    Key: `${file.dir}/${file.name}.${file.ext}`
   };
+
   return new Promise((resolve, reject) => {
-    // upload is a web request to S3
-    // if successful, we get a response
-    // need to do something with that data (likely: save that URL in our DB)
-    // node uses "error first, single argument callbacks"
-    // S3 uses same style: callback(err, data)
     s3.upload(options, (error, data) => {
       if (error) {
         reject(error);
       }
+
       resolve(data);
     });
   });
@@ -82,6 +109,8 @@ const logMessage = (response) => {
 
 readFile(filename)
 .then(parseFile)
+.then(nameFile)
+.then(nameDirectory)
 .then(upload)
 .then(logMessage)
 .catch(console.error)
