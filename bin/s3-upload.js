@@ -1,7 +1,14 @@
 'use strict';
+// this has to be at the top
+// gets export from dotenv, which is an object
+// object has a method called config
+// executes that method
+// this method reads .env and makes variables available via process.env
+require('dotenv').config();
 
 const fs = require('fs');
 const fileType = require('file-type');
+const AWS = require('aws-sdk');
 
 const filename = process.argv[2] || '';
 
@@ -34,6 +41,13 @@ const parseFile = (fileBuffer) => {
   return file;
 };
 
+const s3 = new AWS.S3({
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  },
+});
+
 const upload = (file) => {
   const options = {
     // get bucket name from AWS S3 console
@@ -47,14 +61,23 @@ const upload = (file) => {
     // pick a filename for S3 to use for the upload
     Key: `test/test.${file.ext}`
   };
-  return Promise.resolve(options);
+  return new Promise((resolve, reject) => {
+    // upload is a web request to S3
+    // if successful, we get a response
+    // need to do something with that data (likely: save that URL in our DB)
+    // node uses "error first, single argument callbacks"
+    // S3 uses same style: callback(err, data)
+    s3.upload(options, (error, data) => {
+      if (error) {
+        reject(error);
+      }
+      resolve(data);
+    });
+  });
 };
 
-const logMessage = (upload) => {
-  // get rid of stream for now, so we can cleanly log rest of options in Terminal
-  delete upload.Body;
-  // turn pojo into string for better viewing in console
-  console.log(`the upload options are ${JSON.stringify(upload)}`);
+const logMessage = (response) => {
+  console.log(`the response from AWS was ${JSON.stringify(response)}`);
 };
 
 readFile(filename)
